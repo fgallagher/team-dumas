@@ -153,6 +153,10 @@ button, input { font: inherit; color: inherit; }
           <div class="filters-label">Show</div>
           <div class="filters" id="readf"></div>
         </div>
+        <div>
+          <div class="filters-label">Sort</div>
+          <div class="filters" id="sortf"></div>
+        </div>
       </div>
       <div class="count"><span id="count"></span><button id="markall" type="button">Mark all read</button></div>
       <ul class="list" id="list"></ul>
@@ -174,7 +178,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 let read = new Set(store.get("dfa-read", []));
-const state = { q: "", cosms: new Set(), types: new Set(), statuses: new Set(), readf: "All", current: null };
+const state = { q: "", cosms: new Set(), types: new Set(), statuses: new Set(), readf: "All", sort: "Newest first", current: null };
 const STATUSES = ["Reported", "Active", "Closed"];
 
 const files = DATA.files.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
@@ -196,11 +200,20 @@ const readBtns = ["All", "Unread", "Read"].map(t => {
   b.onclick = () => { state.readf = t; readBtns.forEach(x => x.setAttribute("aria-pressed", x.textContent === t)); render(); };
   document.getElementById("readf").appendChild(b); return b;
 });
+const SORT_KEY = "dfa-sort";
+state.sort = store.get(SORT_KEY, "Newest first");
+const sortBtns = ["Newest first", "Oldest first"].map(t => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "chip"; b.textContent = t; b.setAttribute("aria-pressed", t === state.sort);
+  b.onclick = () => { state.sort = t; store.set(SORT_KEY, t); sortBtns.forEach(x => x.setAttribute("aria-pressed", x.textContent === t)); if (state.current) open(state.current, false); else render(); };
+  document.getElementById("sortf").appendChild(b); return b;
+});
 
 const plain = f => (f.title + " " + f.text + " " + f.locales.join(" ")).toLowerCase();
 function visible() {
   const q = state.q.trim().toLowerCase();
-  return files.filter(f =>
+  const list = state.sort === "Oldest first" ? files.slice().reverse() : files;
+  return list.filter(f =>
     (!state.cosms.size || f.locales.some(c => state.cosms.has(c))) &&
     (!state.types.size || state.types.has(f.type)) &&
     (!state.statuses.size || state.statuses.has(f.status)) &&
@@ -230,7 +243,7 @@ function open(id, user) {
   const f = files.find(x => x.id === id); if (!f) return;
   state.current = id; if (user) { read.add(id); store.set("dfa-read", [...read]); }
   const v = visible(); const i = v.findIndex(x => x.id === id);
-  const newer = v[i - 1], older = v[i + 1];
+  const newer = v[i - 1], older = v[i + 1]; // previous / next in current list order
   const el = document.getElementById("file");
   el.style.setProperty("--cosm", cv(f.locales[0]));
   el.innerHTML = `<button class="back" type="button" id="back">← All files</button>
@@ -253,7 +266,7 @@ document.getElementById("markall").onclick = () => { files.forEach(f => read.add
 
 const hash = (location.hash || "").slice(1);
 render();
-open(files.some(f => f.id === hash) ? hash : files[0].id, false);
+open(files.some(f => f.id === hash) ? hash : visible()[0].id, false);
 if (!hash && window.matchMedia("(max-width: 760px)").matches) document.getElementById("app").classList.remove("reading");
 </script>
 
